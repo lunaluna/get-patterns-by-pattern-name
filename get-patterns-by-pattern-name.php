@@ -1,15 +1,17 @@
 <?php
 /**
- * Plugin Name: Get Patterns by Pattern Name
- * Description: 同期パターン（wp_block）を「名前」で取得するヘルパー関数を提供します。
- * Version:     1.0.0
+ * Plugin Name:       Get Patterns by Pattern Name
+ * Plugin URI:        https://github.com/lunaluna/get-patterns-by-pattern-name
+ * Description:       同期パターン（wp_block）を「名前」で取得するヘルパー関数を提供します。
+ * Version:           1.1.0
  * Requires at least: 6.0
- * Requires PHP: 7.4
- * Author:      Hiroki Saiki
- * Author URI:  https://profiles.wordpress.org/lunaluna_dev/
- * License:     GPL-2.0+
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: get-patterns-by-pattern-name
+ * Tested up to:      7.0.1
+ * Requires PHP:      7.4
+ * Author:            lunaluna_dev
+ * Author URI:        https://profiles.wordpress.org/lunaluna_dev/
+ * License:           GPL-2.0+
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       get-patterns-by-pattern-name
  *
  * @package GetPatternsByPatternName
  */

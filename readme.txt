@@ -2,9 +2,9 @@
 Contributors: lunaluna_dev
 Tags: block patterns, synced patterns, wp_block, helper, query
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 7.0.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,6 +29,36 @@ $pattern = get_pattern_by_name( 'ヘッダーバナー' );
 if ( $pattern ) {
     echo apply_filters( 'the_content', $pattern->post_content );
 }
+```
+
+**フック**
+
+外部から挙動を拡張するための 4 つのフック（`gpbpn_` 接頭辞）を提供します。
+
+* `gpbpn_pre_get_pattern`（filter）— クエリ発行前の短絡。オブジェクトキャッシュや transient によるクエリ回避に使用できます。
+* `gpbpn_query_args`（filter）— `WP_Query` に渡す引数を変更します。`post_status` の拡張や Polylang/WPML 連携などに使用できます。
+* `gpbpn_pattern_not_found`（action）— パターンが見つからないときに発火します。ロギング・監視用途に使用できます。
+* `gpbpn_result`（filter）— 取得結果（`WP_Post|null`）を返す直前に加工・差し替えます。
+
+使用例:
+
+```php
+// オブジェクトキャッシュで短絡させる.
+add_filter( 'gpbpn_pre_get_pattern', function ( $pre, $pattern_name ) {
+    $cached = wp_cache_get( 'gpbpn_' . $pattern_name, 'gpbpn' );
+    return false !== $cached ? $cached : $pre;
+}, 10, 2 );
+
+// post_status を拡張する.
+add_filter( 'gpbpn_query_args', function ( $args ) {
+    $args['post_status'] = array( 'publish', 'private' );
+    return $args;
+} );
+
+// 見つからなかった場合にログを残す.
+add_action( 'gpbpn_pattern_not_found', function ( $pattern_name ) {
+    error_log( sprintf( 'Pattern not found: %s', $pattern_name ) );
+} );
 ```
 
 == Installation ==
@@ -56,10 +86,17 @@ WordPress 管理画面の「パターン」（または「再利用ブロック�
 
 == Changelog ==
 
+= 1.1.0 =
+* `gpbpn_pre_get_pattern`・`gpbpn_query_args`・`gpbpn_pattern_not_found`・`gpbpn_result` の 4 フックを追加。
+* `get_pattern_by_name()` に `function_exists()` ガードを追加し、他プラグイン・テーマとの関数名衝突による fatal error を防止。
+
 = 1.0.0 =
 * 初回リリース。`get_pattern_by_name()` 関数を追加。
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+フック追加のみで既存の挙動に変更はありません。アップグレード作業は不要です。
 
 = 1.0.0 =
 初回リリースです。アップグレード作業は不要です。
