@@ -2,7 +2,7 @@
 Contributors: lunaluna_dev
 Tags: block patterns, synced patterns, wp_block, helper, query
 Requires at least: 6.0
-Tested up to: 7.0.1
+Tested up to: 7.0.2
 Requires PHP: 7.4
 Stable tag: 1.1.0
 License: GPL-2.0+

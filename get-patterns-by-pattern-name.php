@@ -5,10 +5,11 @@
  * Description:       同期パターン（wp_block）を「名前」で取得するヘルパー関数を提供します。
  * Version:           1.1.0
  * Requires at least: 6.0
- * Tested up to:      7.0.1
+ * Tested up to:      7.0.2
  * Requires PHP:      7.4
  * Author:            lunaluna_dev
  * Author URI:        https://profiles.wordpress.org/lunaluna_dev/
+ * Update URI:        https://github.com/lunaluna/get-patterns-by-pattern-name
  * License:           GPL-2.0+
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       get-patterns-by-pattern-name
