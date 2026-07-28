@@ -59,6 +59,10 @@ add_filter( 'gpbpn_result', function ( $pattern, $pattern_name ) {
 }, 10, 2 );
 
 // post_status を拡張する（publish 以外を返す場合、閲覧権限の確認はプラグイン側で自動的に行われます）.
+// 注意: wp_block は capability_type が独自の "block" のため、private 等を返す場合に
+// 必要となる権限（read_private_blocks 相当）は既定では管理者ロールにも付与されていません。
+// 付与されていない場合、この拡張は管理者であっても常に null を返します（安全側の挙動です）。
+// 実際にこの拡張を使う場合は、対象ロールに add_cap() などで明示的に権限を付与してください.
 add_filter( 'gpbpn_query_args', function ( $args ) {
     $args['post_status'] = array( 'publish', 'private' );
     return $args;
@@ -92,6 +96,10 @@ WordPress 管理画面の「パターン」（または「再利用ブロック�
 = 同名のパターンが複数ある場合はどうなりますか？ =
 
 投稿 ID が最も小さいもの（最初に作成されたパターン）を返します。重複が見つかると `gpbpn_duplicate_pattern_found` アクションが発火するため、監視・通知に利用できます。パターン名は一意にしておくことを推奨します。
+
+= `gpbpn_query_args` で post_status に private 等を含めても null が返ってきます =
+
+`wp_block` 投稿タイプは `capability_type` が独自の "block" であるため、非公開状態を読み取るための権限（`read_private_blocks` 相当）が既定では管理者ロールにも付与されていません。この権限が付与されていない環境では、`post_status` を非公開系に拡張しても、管理者を含め全てのユーザーに対して `null` が返ります（意図的な安全側の挙動で、セキュリティ上の問題ではありません）。実際にこの拡張を利用する場合は、対象ロールに `add_cap()` 等で該当の権限を明示的に付与してください。
 
 = 非同期パターン（unsynced pattern）も取得されますか？ =
 
