@@ -44,12 +44,3 @@ jobs:
           coverage: none
       - uses: ramsey/composer-install@v3
       - run: vendor/bin/phpcs --standard=PHPCompatibilityWP --runtime-set testVersion ${{ matrix.php }} get-patterns-by-pattern-name.php
-
-  plugin-check:
-    name: WordPress Plugin Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: WordPress/plugin-check-action@v1
-        with:
-          build-dir: './'

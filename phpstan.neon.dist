@@ -5,3 +5,7 @@ parameters:
     level: 6
     paths:
         - get-patterns-by-pattern-name.php
+    # フィルタ・アクションの @param docblock を型の「確定情報」として信用しない.
+    # 外部フィルタがドキュメントの契約に反する値を返す可能性を前提に、
+    # instanceof によるランタイム検証を意図的に残しているため.
+    treatPhpDocTypesAsCertain: false
