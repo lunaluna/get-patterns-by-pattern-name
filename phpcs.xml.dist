@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<ruleset name="Get Patterns by Pattern Name">
+    <description>Coding standard for the Get Patterns by Pattern Name plugin.</description>
+
+    <file>.</file>
+    <exclude-pattern>/vendor/*</exclude-pattern>
+    <exclude-pattern>/node_modules/*</exclude-pattern>
+
+    <arg value="sp"/>
+    <arg name="basepath" value="./"/>
+    <arg name="colors"/>
+    <arg name="extensions" value="php"/>
+    <arg name="parallel" value="8"/>
+
+    <rule ref="WordPress-Extra"/>
+    <rule ref="WordPress-Docs"/>
+
+    <config name="minimum_supported_wp_version" value="6.0"/>
+
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="gpbpn"/>
+                <element value="get_pattern_by_name"/>
+            </property>
+        </properties>
+    </rule>
+</ruleset>
