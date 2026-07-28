@@ -242,6 +242,30 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 		// 投稿オブジェクト自体は get_post() 経由で取得し、WordPress コア標準の投稿オブジェクトキャッシュを活用する.
 		$pattern = $pattern_id > 0 ? get_post( $pattern_id ) : null;
 
+		/**
+		 * DB の照合順序(collation)に依存しない、post_title の厳密な完全一致を要求するかどうかを制御します.
+		 *
+		 * 既定では WP_Query の title パラメータによる DB 側の比較結果をそのまま使用します(既定 false).
+		 * true を返すと、DB から取得した post_title が実際に問い合わせた文字列と一致する場合のみ
+		 * パターンを返します。WordPress 標準の照合順序(utf8mb4_unicode_ci 等)は大文字小文字や
+		 * 全角/半角を区別しないため、権限の低いユーザーが紛らわしい名前で作成したパターンに
+		 * 差し替えられるのを防げます(詳細は readme の FAQ を参照).
+		 *
+		 * 後方互換のため 1.3.0 では既定 false です(2.0.0 では既定 true に変更予定).
+		 * なお WP_Query は比較前に stripslashes() を適用するため、パターン名に `\`(バックスラッシュ)を
+		 * 含む場合は厳密モードでは一致しません(既知の制約).
+		 *
+		 * @since 1.3.0
+		 *
+		 * @param bool   $strict       厳密一致を要求するかどうか. 既定 false.
+		 * @param string $pattern_name サニタイズ済みのパターン名.
+		 */
+		$strict = (bool) apply_filters( 'gpbpn_strict_title_match', false, $pattern_name );
+
+		if ( $strict && $pattern instanceof WP_Post && $pattern->post_title !== $pattern_name ) {
+			$pattern = null;
+		}
+
 		// post_status に publish 以外を含める拡張を行った場合は、閲覧権限を必ず確認する.
 		if ( $pattern instanceof WP_Post && 'publish' !== $pattern->post_status
 			&& ! current_user_can( 'read_post', $pattern->ID ) ) {
