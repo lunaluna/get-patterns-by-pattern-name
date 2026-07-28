@@ -87,7 +87,9 @@ add_action( 'deleted_post', 'gpbpn_maybe_bump_cache_version', 10, 2 );
  * @return string キャッシュキー.
  */
 function gpbpn_get_cache_key( array $args ) {
-	return 'gpbpn:v1:' . gpbpn_get_cache_version() . ':' . md5( (string) wp_json_encode( $args ) );
+	// v2: キャッシュに保存する値を WP_Post オブジェクトから投稿 ID(int)に変更したため、
+	// 旧バージョンのプラグインが残したキャッシュ値と型が混在しないようにプレフィックスを更新している.
+	return 'gpbpn:v2:' . gpbpn_get_cache_version() . ':' . md5( (string) wp_json_encode( $args ) );
 }
 
 if ( ! function_exists( 'get_pattern_by_name' ) ) :
@@ -108,6 +110,7 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 	 * - no_found_rows: SQL_CALC_FOUND_ROWS を省略し、ページネーション用 COUNT を回避します.
 	 * - update_post_term_cache: タクソノミーキャッシュの更新を省略します.
 	 * - update_post_meta_cache: メタデータキャッシュの更新を省略します.
+	 * - fields: 投稿 ID のみを取得し、get_post() 経由で投稿オブジェクトキャッシュを活用します.
 	 *
 	 * 使用例:
 	 *
@@ -184,6 +187,8 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 			'update_post_term_cache' => false,
 			// メタデータキャッシュの更新を省略する.
 			'update_post_meta_cache' => false,
+			// 投稿 ID のみを取得し、get_post() で投稿オブジェクトキャッシュを活用する.
+			'fields'                 => 'ids',
 		);
 
 		/**
@@ -204,18 +209,19 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 		// 投稿タイプは同期パターン固定とし、外部フィルタからの上書きを許可しない.
 		$args['post_type']      = 'wp_block';
 		$args['posts_per_page'] = min( 2, max( 1, (int) ( isset( $args['posts_per_page'] ) ? $args['posts_per_page'] : 2 ) ) );
+		$args['fields']         = 'ids';
 
 		$cache_key    = gpbpn_get_cache_key( $args );
 		$cached_value = wp_cache_get( $cache_key, 'gpbpn' );
 
 		if ( false !== $cached_value ) {
 			// キャッシュヒット. 0(センチネル値)は「見つからなかった」を表す.
-			$pattern = $cached_value instanceof WP_Post ? $cached_value : null;
+			$pattern_id = (int) $cached_value;
 		} else {
-			$query = new WP_Query( $args );
-			$posts = $query->posts;
+			$query    = new WP_Query( $args );
+			$post_ids = $query->posts;
 
-			if ( count( $posts ) > 1 ) {
+			if ( count( $post_ids ) > 1 ) {
 				/**
 				 * 同名の同期パターンが複数存在するときに発火します(監視・通知用).
 				 *
@@ -224,14 +230,17 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 				 * @param string $pattern_name サニタイズ済みのパターン名.
 				 * @param int[]  $post_ids     重複しているパターンの投稿 ID の配列.
 				 */
-				do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, wp_list_pluck( $posts, 'ID' ) );
+				do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, $post_ids );
 			}
 
-			$pattern = isset( $posts[0] ) ? $posts[0] : null;
+			$pattern_id = isset( $post_ids[0] ) ? (int) $post_ids[0] : 0;
 
-			// 見つからなかった結果も含めてキャッシュする(0 を「見つからなかった」を表すセンチネル値として使用する).
-			wp_cache_set( $cache_key, $pattern instanceof WP_Post ? $pattern : 0, 'gpbpn' );
+			// 見つからなかった結果も含めてキャッシュする(0 が「見つからなかった」を表すセンチネル値).
+			wp_cache_set( $cache_key, $pattern_id, 'gpbpn' );
 		}
+
+		// 投稿オブジェクト自体は get_post() 経由で取得し、WordPress コア標準の投稿オブジェクトキャッシュを活用する.
+		$pattern = $pattern_id > 0 ? get_post( $pattern_id ) : null;
 
 		// post_status に publish 以外を含める拡張を行った場合は、閲覧権限を必ず確認する.
 		if ( $pattern instanceof WP_Post && 'publish' !== $pattern->post_status
