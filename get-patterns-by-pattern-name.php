@@ -20,6 +20,76 @@
 // WordPress 環境外からの直接アクセスを禁止する.
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * 内部キャッシュのバージョン番号を取得します.
+ *
+ * 同期パターンの内容が変わったときにこの番号をインクリメントすることで、
+ * 個々のキャッシュエントリを個別に削除せずに一括で無効化します
+ * (`wp_cache_delete_group()` は多くのキャッシュバックエンドで未サポートのため).
+ *
+ * @since 1.3.0
+ *
+ * @return int キャッシュバージョン番号.
+ */
+function gpbpn_get_cache_version() {
+	return (int) get_option( 'gpbpn_cache_version', 1 );
+}
+
+/**
+ * 内部キャッシュのバージョン番号をインクリメントし、キャッシュを一括無効化します.
+ *
+ * @since 1.3.0
+ *
+ * @return void
+ */
+function gpbpn_bump_cache_version() {
+	update_option( 'gpbpn_cache_version', gpbpn_get_cache_version() + 1, false );
+}
+
+/**
+ * 投稿の更新・削除が wp_block に対するものだった場合のみキャッシュを無効化します.
+ *
+ * `post_updated` / `trashed_post` / `untrashed_post` / `deleted_post` は
+ * 投稿タイプを問わず発火するため、無関係な投稿の更新でパターンキャッシュ全体が
+ * 無効化されるのを防ぎます.
+ *
+ * @since 1.3.0
+ *
+ * @param int          $post_id 対象の投稿 ID.
+ * @param WP_Post|null $post    投稿オブジェクト(フックから渡される場合).
+ * @return void
+ */
+function gpbpn_maybe_bump_cache_version( $post_id, $post = null ) {
+	$post_type = $post instanceof WP_Post ? $post->post_type : get_post_type( $post_id );
+
+	if ( 'wp_block' === $post_type ) {
+		gpbpn_bump_cache_version();
+	}
+}
+
+add_action( 'save_post_wp_block', 'gpbpn_bump_cache_version' );
+add_action( 'post_updated', 'gpbpn_maybe_bump_cache_version', 10, 2 );
+add_action( 'trashed_post', 'gpbpn_maybe_bump_cache_version' );
+add_action( 'untrashed_post', 'gpbpn_maybe_bump_cache_version' );
+add_action( 'deleted_post', 'gpbpn_maybe_bump_cache_version', 10, 2 );
+
+/**
+ * WP_Query に渡す最終的な引数から、gpbpn の内部キャッシュキーを生成します.
+ *
+ * パターン名だけでなく `gpbpn_query_args` フィルタ適用後の引数全体を
+ * ハッシュに含めることで、フィルタによってクエリ条件(post_status の拡張や
+ * 多言語プラグインとの連携など)が呼び出しごとに変わる場合でも、異なる条件の
+ * 結果が取り違えられないようにしています.
+ *
+ * @since 1.3.0
+ *
+ * @param array<string, mixed> $args WP_Query に渡す最終的な引数.
+ * @return string キャッシュキー.
+ */
+function gpbpn_get_cache_key( array $args ) {
+	return 'gpbpn:v1:' . gpbpn_get_cache_version() . ':' . md5( (string) wp_json_encode( $args ) );
+}
+
 if ( ! function_exists( 'get_pattern_by_name' ) ) :
 	/**
 	 * 名前（post_title）の完全一致で同期パターンを取得します.
@@ -135,22 +205,33 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 		$args['post_type']      = 'wp_block';
 		$args['posts_per_page'] = min( 2, max( 1, (int) ( isset( $args['posts_per_page'] ) ? $args['posts_per_page'] : 2 ) ) );
 
-		$query = new WP_Query( $args );
-		$posts = $query->posts;
+		$cache_key    = gpbpn_get_cache_key( $args );
+		$cached_value = wp_cache_get( $cache_key, 'gpbpn' );
 
-		if ( count( $posts ) > 1 ) {
-			/**
-			 * 同名の同期パターンが複数存在するときに発火します(監視・通知用).
-			 *
-			 * @since 1.2.0
-			 *
-			 * @param string $pattern_name サニタイズ済みのパターン名.
-			 * @param int[]  $post_ids     重複しているパターンの投稿 ID の配列.
-			 */
-			do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, wp_list_pluck( $posts, 'ID' ) );
+		if ( false !== $cached_value ) {
+			// キャッシュヒット. 0(センチネル値)は「見つからなかった」を表す.
+			$pattern = $cached_value instanceof WP_Post ? $cached_value : null;
+		} else {
+			$query = new WP_Query( $args );
+			$posts = $query->posts;
+
+			if ( count( $posts ) > 1 ) {
+				/**
+				 * 同名の同期パターンが複数存在するときに発火します(監視・通知用).
+				 *
+				 * @since 1.2.0
+				 *
+				 * @param string $pattern_name サニタイズ済みのパターン名.
+				 * @param int[]  $post_ids     重複しているパターンの投稿 ID の配列.
+				 */
+				do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, wp_list_pluck( $posts, 'ID' ) );
+			}
+
+			$pattern = isset( $posts[0] ) ? $posts[0] : null;
+
+			// 見つからなかった結果も含めてキャッシュする(0 を「見つからなかった」を表すセンチネル値として使用する).
+			wp_cache_set( $cache_key, $pattern instanceof WP_Post ? $pattern : 0, 'gpbpn' );
 		}
-
-		$pattern = isset( $posts[0] ) ? $posts[0] : null;
 
 		// post_status に publish 以外を含める拡張を行った場合は、閲覧権限を必ず確認する.
 		if ( $pattern instanceof WP_Post && 'publish' !== $pattern->post_status
