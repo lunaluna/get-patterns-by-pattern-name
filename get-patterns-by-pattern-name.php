@@ -3,7 +3,7 @@
  * Plugin Name:       Get Patterns by Pattern Name
  * Plugin URI:        https://github.com/lunaluna/get-patterns-by-pattern-name
  * Description:       同期パターン（wp_block）を「名前」で取得するヘルパー関数を提供します。
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 6.0
  * Tested up to:      7.0.2
  * Requires PHP:      7.4
@@ -19,6 +19,78 @@
 
 // WordPress 環境外からの直接アクセスを禁止する.
 defined( 'ABSPATH' ) || exit;
+
+/**
+ * 内部キャッシュのバージョン番号を取得します.
+ *
+ * 同期パターンの内容が変わったときにこの番号をインクリメントすることで、
+ * 個々のキャッシュエントリを個別に削除せずに一括で無効化します
+ * (`wp_cache_delete_group()` は多くのキャッシュバックエンドで未サポートのため).
+ *
+ * @since 1.3.0
+ *
+ * @return int キャッシュバージョン番号.
+ */
+function gpbpn_get_cache_version() {
+	return (int) get_option( 'gpbpn_cache_version', 1 );
+}
+
+/**
+ * 内部キャッシュのバージョン番号をインクリメントし、キャッシュを一括無効化します.
+ *
+ * @since 1.3.0
+ *
+ * @return void
+ */
+function gpbpn_bump_cache_version() {
+	update_option( 'gpbpn_cache_version', gpbpn_get_cache_version() + 1, false );
+}
+
+/**
+ * 投稿の更新・削除が wp_block に対するものだった場合のみキャッシュを無効化します.
+ *
+ * `post_updated` / `trashed_post` / `untrashed_post` / `deleted_post` は
+ * 投稿タイプを問わず発火するため、無関係な投稿の更新でパターンキャッシュ全体が
+ * 無効化されるのを防ぎます.
+ *
+ * @since 1.3.0
+ *
+ * @param int          $post_id 対象の投稿 ID.
+ * @param WP_Post|null $post    投稿オブジェクト(フックから渡される場合).
+ * @return void
+ */
+function gpbpn_maybe_bump_cache_version( $post_id, $post = null ) {
+	$post_type = $post instanceof WP_Post ? $post->post_type : get_post_type( $post_id );
+
+	if ( 'wp_block' === $post_type ) {
+		gpbpn_bump_cache_version();
+	}
+}
+
+add_action( 'save_post_wp_block', 'gpbpn_bump_cache_version' );
+add_action( 'post_updated', 'gpbpn_maybe_bump_cache_version', 10, 2 );
+add_action( 'trashed_post', 'gpbpn_maybe_bump_cache_version' );
+add_action( 'untrashed_post', 'gpbpn_maybe_bump_cache_version' );
+add_action( 'deleted_post', 'gpbpn_maybe_bump_cache_version', 10, 2 );
+
+/**
+ * WP_Query に渡す最終的な引数から、gpbpn の内部キャッシュキーを生成します.
+ *
+ * パターン名だけでなく `gpbpn_query_args` フィルタ適用後の引数全体を
+ * ハッシュに含めることで、フィルタによってクエリ条件(post_status の拡張や
+ * 多言語プラグインとの連携など)が呼び出しごとに変わる場合でも、異なる条件の
+ * 結果が取り違えられないようにしています.
+ *
+ * @since 1.3.0
+ *
+ * @param array<string, mixed> $args WP_Query に渡す最終的な引数.
+ * @return string キャッシュキー.
+ */
+function gpbpn_get_cache_key( array $args ) {
+	// v2: キャッシュに保存する値を WP_Post オブジェクトから投稿 ID(int)に変更したため、
+	// 旧バージョンのプラグインが残したキャッシュ値と型が混在しないようにプレフィックスを更新している.
+	return 'gpbpn:v2:' . gpbpn_get_cache_version() . ':' . md5( (string) wp_json_encode( $args ) );
+}
 
 if ( ! function_exists( 'get_pattern_by_name' ) ) :
 	/**
@@ -38,6 +110,7 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 	 * - no_found_rows: SQL_CALC_FOUND_ROWS を省略し、ページネーション用 COUNT を回避します.
 	 * - update_post_term_cache: タクソノミーキャッシュの更新を省略します.
 	 * - update_post_meta_cache: メタデータキャッシュの更新を省略します.
+	 * - fields: 投稿 ID のみを取得し、get_post() 経由で投稿オブジェクトキャッシュを活用します.
 	 *
 	 * 使用例:
 	 *
@@ -114,7 +187,40 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 			'update_post_term_cache' => false,
 			// メタデータキャッシュの更新を省略する.
 			'update_post_meta_cache' => false,
+			// 投稿 ID のみを取得し、get_post() で投稿オブジェクトキャッシュを活用する.
+			'fields'                 => 'ids',
 		);
+
+		/**
+		 * 同期パターン(wp_pattern_sync_status が未設定/空)のみを取得対象にするかどうかを制御します.
+		 *
+		 * 既定では投稿タイプが wp_block であれば、同期・非同期(unsynced)を問わず取得します
+		 * (既定 false. 後方互換のため). true を返すと、wp_pattern_sync_status メタが
+		 * 未設定または空の(完全に同期している)パターンのみを対象にする meta_query が
+		 * 追加されます. meta_query はクエリコストが上がるため、必要な場合のみ有効にしてください.
+		 *
+		 * @since 1.3.0
+		 *
+		 * @param bool   $synced_only  同期パターンのみに限定するかどうか. 既定 false.
+		 * @param string $pattern_name サニタイズ済みのパターン名.
+		 */
+		$synced_only = (bool) apply_filters( 'gpbpn_synced_only', false, $pattern_name );
+
+		if ( $synced_only ) {
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- opt-in のみで発生するコストであるため許容する.
+			$defaults['meta_query'] = array(
+				'relation' => 'OR',
+				array(
+					'key'     => 'wp_pattern_sync_status',
+					'compare' => 'NOT EXISTS',
+				),
+				array(
+					'key'     => 'wp_pattern_sync_status',
+					'value'   => '',
+					'compare' => '=',
+				),
+			);
+		}
 
 		/**
 		 * WP_Query に渡す引数を変更します.
@@ -134,23 +240,63 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 		// 投稿タイプは同期パターン固定とし、外部フィルタからの上書きを許可しない.
 		$args['post_type']      = 'wp_block';
 		$args['posts_per_page'] = min( 2, max( 1, (int) ( isset( $args['posts_per_page'] ) ? $args['posts_per_page'] : 2 ) ) );
+		$args['fields']         = 'ids';
 
-		$query = new WP_Query( $args );
-		$posts = $query->posts;
+		$cache_key    = gpbpn_get_cache_key( $args );
+		$cached_value = wp_cache_get( $cache_key, 'gpbpn' );
 
-		if ( count( $posts ) > 1 ) {
-			/**
-			 * 同名の同期パターンが複数存在するときに発火します(監視・通知用).
-			 *
-			 * @since 1.2.0
-			 *
-			 * @param string $pattern_name サニタイズ済みのパターン名.
-			 * @param int[]  $post_ids     重複しているパターンの投稿 ID の配列.
-			 */
-			do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, wp_list_pluck( $posts, 'ID' ) );
+		if ( false !== $cached_value ) {
+			// キャッシュヒット. 0(センチネル値)は「見つからなかった」を表す.
+			$pattern_id = (int) $cached_value;
+		} else {
+			$query    = new WP_Query( $args );
+			$post_ids = $query->posts;
+
+			if ( count( $post_ids ) > 1 ) {
+				/**
+				 * 同名の同期パターンが複数存在するときに発火します(監視・通知用).
+				 *
+				 * @since 1.2.0
+				 *
+				 * @param string $pattern_name サニタイズ済みのパターン名.
+				 * @param int[]  $post_ids     重複しているパターンの投稿 ID の配列.
+				 */
+				do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, $post_ids );
+			}
+
+			$pattern_id = isset( $post_ids[0] ) ? (int) $post_ids[0] : 0;
+
+			// 見つからなかった結果も含めてキャッシュする(0 が「見つからなかった」を表すセンチネル値).
+			wp_cache_set( $cache_key, $pattern_id, 'gpbpn' );
 		}
 
-		$pattern = isset( $posts[0] ) ? $posts[0] : null;
+		// 投稿オブジェクト自体は get_post() 経由で取得し、WordPress コア標準の投稿オブジェクトキャッシュを活用する.
+		$pattern = $pattern_id > 0 ? get_post( $pattern_id ) : null;
+
+		/**
+		 * DB の照合順序(collation)に依存しない、post_title の厳密な完全一致を要求するかどうかを制御します.
+		 *
+		 * 既定では WP_Query の title パラメータによる DB 側の比較結果をそのまま使用します(既定 false).
+		 * true を返すと、DB から取得した post_title が実際に問い合わせた文字列と一致する場合のみ
+		 * パターンを返します。WordPress 標準の照合順序(utf8mb4_unicode_ci 等)は大文字小文字や
+		 * 全角/半角を区別しないため、権限の低いユーザーが紛らわしい名前で作成したパターンに
+		 * 差し替えられるのを防げます(詳細は readme の FAQ を参照).
+		 *
+		 * 後方互換のため 1.3.0 では既定 false です(2.0.0 では既定 true に変更予定).
+		 * なお `\`(バックスラッシュ)を含むタイトルは wp_insert_post() の保存時点で既に
+		 * 失われる(WordPress 自体が入力値を unslash するため)ので、実際に影響するのは
+		 * データベースへ直接タイトルを書き込むなど通常の投稿作成 API を経由しない場合に限られます.
+		 *
+		 * @since 1.3.0
+		 *
+		 * @param bool   $strict       厳密一致を要求するかどうか. 既定 false.
+		 * @param string $pattern_name サニタイズ済みのパターン名.
+		 */
+		$strict = (bool) apply_filters( 'gpbpn_strict_title_match', false, $pattern_name );
+
+		if ( $strict && $pattern instanceof WP_Post && $pattern->post_title !== $pattern_name ) {
+			$pattern = null;
+		}
 
 		// post_status に publish 以外を含める拡張を行った場合は、閲覧権限を必ず確認する.
 		if ( $pattern instanceof WP_Post && 'publish' !== $pattern->post_status

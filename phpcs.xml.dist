@@ -13,7 +13,10 @@
     <arg name="parallel" value="8"/>
 
     <rule ref="WordPress-Extra"/>
-    <rule ref="WordPress-Docs"/>
+    <rule ref="WordPress-Docs">
+        <!-- テストメソッドは名前が自己文書的なため、docblock 必須ルールは適用しない. -->
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
 
     <config name="minimum_supported_wp_version" value="6.0"/>
 

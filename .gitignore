@@ -19,5 +19,11 @@ Thumbs.db
 # Logs
 *.log
 
+# PHPUnit
+.phpunit.result.cache
+
+# wp-env
+.wp-env.override.json
+
 # Composer
 composer.phar
