@@ -1,0 +1,11 @@
+{
+	"name": "get-patterns-by-pattern-name",
+	"private": true,
+	"scripts": {
+		"wp-env": "wp-env",
+		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/get-patterns-by-pattern-name -- vendor/bin/phpunit -c phpunit.xml.dist"
+	},
+	"devDependencies": {
+		"@wordpress/env": "^10.0.0"
+	}
+}
