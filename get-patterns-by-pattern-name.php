@@ -192,6 +192,37 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 		);
 
 		/**
+		 * 同期パターン(wp_pattern_sync_status が未設定/空)のみを取得対象にするかどうかを制御します.
+		 *
+		 * 既定では投稿タイプが wp_block であれば、同期・非同期(unsynced)を問わず取得します
+		 * (既定 false. 後方互換のため). true を返すと、wp_pattern_sync_status メタが
+		 * 未設定または空の(完全に同期している)パターンのみを対象にする meta_query が
+		 * 追加されます. meta_query はクエリコストが上がるため、必要な場合のみ有効にしてください.
+		 *
+		 * @since 1.3.0
+		 *
+		 * @param bool   $synced_only  同期パターンのみに限定するかどうか. 既定 false.
+		 * @param string $pattern_name サニタイズ済みのパターン名.
+		 */
+		$synced_only = (bool) apply_filters( 'gpbpn_synced_only', false, $pattern_name );
+
+		if ( $synced_only ) {
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- opt-in のみで発生するコストであるため許容する.
+			$defaults['meta_query'] = array(
+				'relation' => 'OR',
+				array(
+					'key'     => 'wp_pattern_sync_status',
+					'compare' => 'NOT EXISTS',
+				),
+				array(
+					'key'     => 'wp_pattern_sync_status',
+					'value'   => '',
+					'compare' => '=',
+				),
+			);
+		}
+
+		/**
 		 * WP_Query に渡す引数を変更します.
 		 *
 		 * @since 1.1.0
