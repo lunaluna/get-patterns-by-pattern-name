@@ -5,6 +5,8 @@
     <file>.</file>
     <exclude-pattern>/vendor/*</exclude-pattern>
     <exclude-pattern>/node_modules/*</exclude-pattern>
+    <!-- 同梱ライブラリは独自プレフィックス(l2dwpghul)を持ち、自リポジトリの CI で別途検証済み. -->
+    <exclude-pattern>/lib/*</exclude-pattern>
 
     <arg value="sp"/>
     <arg name="basepath" value="./"/>
