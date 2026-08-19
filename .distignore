@@ -22,3 +22,4 @@ phpcs.xml.dist
 phpstan.neon.dist
 .phpunit.result.cache
 *.zip
+release-notes.txt

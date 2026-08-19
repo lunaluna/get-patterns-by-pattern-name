@@ -1,0 +1,40 @@
+name: Release
+
+# 同梱ライブラリ(lib/l2d-updater)が提供する reusable workflow を呼び、
+# タグから配布用 ZIP を組み立てて GitHub Release を作成する。
+#
+# 参照タグ(@vX.Y.Z)は lib/l2d-updater/ のベンダーコピーと必ず揃えること。
+# 片方だけ更新すると、ライブラリ本体と利用側で版が食い違う
+# (lib/l2d-updater/CLAUDE.md の「利用側プラグインへの反映」を参照)。
+#
+# 本プラグインのタグに v 接頭辞は付けない慣習(1.1.0 / 1.2.0 ...)なので、
+# タグフィルタは数字始まりにしている。呼び出し先は "${TAG#v}" で v を
+# 取り除くため、接頭辞の有無どちらでもバージョンは正しく解決される。
+
+on:
+  push:
+    tags: ['[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'リリースするタグ (例 1.4.0).'
+        required: true
+
+# 呼び出し先の GITHUB_TOKEN 権限は呼び出し元を超えられないため、
+# Release 作成に必要な contents: write はここで与える必要がある。
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@v1.0.4
+    with:
+      slug: get-patterns-by-pattern-name
+      # "path:pattern" 形式。パターンにアンカー(^)を含めてはいけない
+      # (呼び出し先が sed の置換パターンの途中に埋め込むため壊れる)。
+      version_files: |
+        get-patterns-by-pattern-name.php:Version:
+        readme.txt:Stable tag:
+      # readme.txt の "= x.y.z =" 節を抽出する。該当節が無いと
+      # "Release x.y.z." の 1 行になるため、リリース前に必ず追記すること。
+      notes_source: readme.txt
