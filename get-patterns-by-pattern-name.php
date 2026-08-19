@@ -9,7 +9,7 @@
  * Requires PHP:      7.4
  * Author:            lunaluna_dev
  * Author URI:        https://profiles.wordpress.org/lunaluna_dev/
- * Update URI:        https://github.com/lunaluna/get-patterns-by-pattern-name
+ * Update URI:        false
  * License:           GPL-2.0+
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       get-patterns-by-pattern-name
@@ -19,6 +19,21 @@
 
 // WordPress 環境外からの直接アクセスを禁止する.
 defined( 'ABSPATH' ) || exit;
+
+/**
+ * GitHub Releases を基準とする自動アップデート機構を登録する.
+ *
+ * @since 1.4.0
+ *
+ * @var callable(array<string, mixed>): void $gpbpn_updater_register
+ */
+$gpbpn_updater_register = require plugin_dir_path( __FILE__ ) . 'lib/l2d-updater/loader.php';
+$gpbpn_updater_register(
+	array(
+		'plugin_file' => __FILE__,
+		'github_repo' => 'lunaluna/get-patterns-by-pattern-name',
+	)
+);
 
 /**
  * 内部キャッシュのバージョン番号を取得します.
