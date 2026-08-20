@@ -15,6 +15,8 @@ Thumbs.db
 # Build artifacts
 /build/
 /dist/
+# bin/build-zip.sh はプラグインルートに {slug}.{version}.zip を生成する.
+/*.zip
 
 # Logs
 *.log

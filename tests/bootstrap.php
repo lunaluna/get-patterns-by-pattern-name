@@ -34,6 +34,10 @@ require_once "{$gpbpn_tests_dir}/includes/functions.php";
 function gpbpn_tests_manually_load_plugin() {
 	require dirname( __DIR__ ) . '/get-patterns-by-pattern-name.php';
 }
+// プラグイン読み込み(muplugins_loaded)より前にキルスイッチを入れ、
+// plugins_loaded -100 で起動するアップデータのコンストラクタが走る時点で
+// 確実に無効化されているようにする(テスト中に GitHub へ通信させない).
+tests_add_filter( 'l2dwpghul_updater_enabled', '__return_false' );
 tests_add_filter( 'muplugins_loaded', 'gpbpn_tests_manually_load_plugin' );
 
 require "{$gpbpn_tests_dir}/includes/bootstrap.php";
