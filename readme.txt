@@ -2,9 +2,9 @@
 Contributors: lunaluna_dev
 Tags: block patterns, synced patterns, wp_block, helper, query
 Requires at least: 6.0
-Tested up to: 7.0.2
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,7 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 * オブジェクトキャッシュによる解決結果のキャッシュ（パターンの保存・更新・削除時に自動的に無効化されます。負の結果＝見つからなかった場合も含めてキャッシュします）
 * `gpbpn_strict_title_match` フィルタで、DB の照合順序（大文字小文字・全角半角を区別しない場合がある）に依存しない厳密なタイトル一致を要求可能（既定は無効。後方互換のため opt-in）
 * `gpbpn_synced_only` フィルタで、同期パターン（`wp_pattern_sync_status` が未設定/空のもの）のみに限定して取得可能（既定は無効。後方互換のため opt-in）
+* wp.org には掲載していないため、GitHub Releases を版元とした自動更新に対応（管理画面での更新通知 → ワンクリック更新）。更新チェックのためのキャッシュ済み HTTP 通信のみ発生し、`l2dwpghul_updater_enabled` フィルタで `false` を返すことで完全に無効化可能
 
 **使い方**
 
@@ -118,6 +119,10 @@ WordPress 管理画面の「パターン」（または「再利用ブロック�
 
 == Changelog ==
 
+= 1.4.0 =
+* GitHub Releases を版元とした自動更新に対応。wp.org 未掲載のため `Update URI: false` を設定し、管理画面での更新通知・ワンクリック更新を独自に提供します。`l2dwpghul_updater_enabled` フィルタ（第 2 引数はプラグインスラッグ）で `false` を返すと、更新チェックの HTTP 通信を完全に無効化できます。
+* WordPress 7.1 で動作確認済み。`Tested up to` を 7.1 に更新。
+
 = 1.3.0 =
 * パフォーマンス: 解決結果をオブジェクトキャッシュに保存するようにし、同じパターン名への繰り返しの呼び出しでクエリの再発行を回避。パターンの保存・更新・削除（`save_post_wp_block` / `post_updated` / `trashed_post` / `untrashed_post` / `deleted_post`）で自動的に無効化されます。見つからなかった結果も含めてキャッシュされ、`gpbpn_query_args` フィルタで変わりうるクエリ条件ごとに別のキャッシュとして扱われます。
 * パフォーマンス: `WP_Query` を投稿 ID のみ取得する方式に変更し、投稿オブジェクト自体は `get_post()` 経由で WordPress コア標準の投稿オブジェクトキャッシュを活用するように変更。
@@ -141,6 +146,9 @@ WordPress 管理画面の「パターン」（または「再利用ブロック�
 * 初回リリース。`get_pattern_by_name()` 関数を追加。
 
 == Upgrade Notice ==
+
+= 1.4.0 =
+既存の関数シグネチャ・戻り値・既定の挙動は後方互換です。GitHub Releases を版元とした自動更新機構が新たに追加され、更新チェックのために api.github.com への外部 HTTP 通信が発生するようになる点にご注意ください（`l2dwpghul_updater_enabled` フィルタで無効化可能）。
 
 = 1.3.0 =
 既存の関数シグネチャ・戻り値・既定の挙動は後方互換です（新しいフィルタは全て既定 off）。内部キャッシュが追加されたため、データベースを直接操作するなど `save_post_wp_block` 等のフックを経由しない方法でパターンを変更している場合、変更が反映されるまでにキャッシュの無効化が必要になる点にご注意ください。
