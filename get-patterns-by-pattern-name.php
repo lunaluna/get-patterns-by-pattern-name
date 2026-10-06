@@ -587,3 +587,6 @@ if ( ! function_exists( 'get_pattern_by_name_or_slug' ) ) :
 		return gpbpn_finish_pattern_lookup( $pattern, $by_title['value'], 'name_or_slug' );
 	}
 endif;
+
+// ブロック gpbpn/pattern の登録と描画(1.5.0).
+require_once __DIR__ . '/includes/pattern-block.php';
