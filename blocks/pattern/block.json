@@ -1,0 +1,25 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "gpbpn/pattern",
+	"title": "Pattern by name or slug",
+	"category": "reusable",
+	"icon": "controls-repeat",
+	"keywords": [ "pattern", "synced", "reusable", "slug" ],
+	"description": "Displays a synced pattern looked up by its name, or by its slug if no pattern has that name.",
+	"textdomain": "get-patterns-by-pattern-name",
+	"attributes": {
+		"pattern": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"usesContext": [ "postId", "postType", "queryId" ],
+	"supports": {
+		"html": false,
+		"customClassName": false,
+		"className": false,
+		"reusable": false
+	},
+	"editorScript": "file:./index.js"
+}

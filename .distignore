@@ -5,6 +5,7 @@
 .editorconfig
 .distignore
 .claude
+.playwright-mcp
 .DS_Store
 .wp-env.json
 .wp-env.override.json

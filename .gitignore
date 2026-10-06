@@ -29,3 +29,6 @@ Thumbs.db
 
 # Composer
 composer.phar
+
+# Playwright MCP の出力(確認用のスクリーンショット・スナップショット)
+.playwright-mcp/

@@ -1,6 +1,6 @@
 {
     "name": "lunaluna/get-patterns-by-pattern-name",
-    "description": "同期パターン（wp_block）を「名前」で取得するヘルパー関数を提供します。",
+    "description": "同期パターン（wp_block）を「名前」（見つからなければ「スラッグ」）で取得するヘルパー関数と、テンプレートや投稿に置けるブロックを提供します。",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
