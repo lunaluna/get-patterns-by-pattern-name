@@ -605,3 +605,6 @@ require_once __DIR__ . '/includes/pattern-block.php';
 
 // 編集画面用の REST ルート gpbpn/v1/resolve(1.5.0).
 require_once __DIR__ . '/includes/rest-resolve.php';
+
+// 管理画面の左カラムに「パターン」(同期パターンの一覧)メニューを追加する(1.6.0).
+require_once __DIR__ . '/includes/admin-menu.php';
