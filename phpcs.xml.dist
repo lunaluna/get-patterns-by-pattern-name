@@ -20,6 +20,11 @@
         <exclude-pattern>/tests/*</exclude-pattern>
     </rule>
 
+    <!-- block.json の editorScript(file:./index.js)の隣にある index.asset.php は、WP が決めたファイル名なので変えられない. -->
+    <rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+        <exclude-pattern>/blocks/*/index.asset.php</exclude-pattern>
+    </rule>
+
     <config name="minimum_supported_wp_version" value="6.0"/>
 
     <rule ref="WordPress.NamingConventions.PrefixAllGlobals">

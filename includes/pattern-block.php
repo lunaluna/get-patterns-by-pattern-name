@@ -18,19 +18,26 @@ defined( 'ABSPATH' ) || exit;
  *
  * 描画は block.json の render(render.php)ではなく render_callback で渡す.
  * 名前の付いた関数にしておくと PHPUnit から直接呼べて、静的解析の対象にも入れやすいため.
- * editorScript(編集画面の JS)は Step 5 で block.json に追加する.
+ * 編集画面の JS(blocks/pattern/index.js)は block.json の editorScript で登録される.
+ * その翻訳(wp.i18n の文字列)を読み込めるよう、登録されたスクリプトのハンドルに翻訳を紐づける.
  *
  * @since 1.5.0
  *
  * @return void
  */
 function gpbpn_register_pattern_block() {
-	register_block_type(
+	$block_type = register_block_type(
 		dirname( __DIR__ ) . '/blocks/pattern',
 		array(
 			'render_callback' => 'gpbpn_render_pattern_block',
 		)
 	);
+
+	if ( $block_type instanceof WP_Block_Type ) {
+		foreach ( $block_type->editor_script_handles as $handle ) {
+			wp_set_script_translations( $handle, 'get-patterns-by-pattern-name' );
+		}
+	}
 }
 add_action( 'init', 'gpbpn_register_pattern_block' );
 

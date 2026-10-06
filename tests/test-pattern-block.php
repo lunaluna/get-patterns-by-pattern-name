@@ -83,6 +83,23 @@ class GPBPN_Test_Pattern_Block extends WP_UnitTestCase {
 		$this->assertTrue( $type->is_dynamic() );
 	}
 
+	public function test_editor_script_is_registered_with_dependencies_and_translations() {
+		$type = WP_Block_Type_Registry::get_instance()->get_registered( 'gpbpn/pattern' );
+
+		$this->assertCount( 1, $type->editor_script_handles );
+
+		$handle  = $type->editor_script_handles[0];
+		$scripts = wp_scripts();
+
+		$this->assertArrayHasKey( $handle, $scripts->registered );
+		// 手書きの index.asset.php の依存が登録されている(足し忘れると編集画面で wp.* が未定義になる).
+		foreach ( array( 'wp-blocks', 'wp-block-editor', 'wp-components', 'wp-core-data', 'wp-element', 'wp-i18n', 'wp-server-side-render', 'wp-api-fetch', 'wp-url' ) as $dependency ) {
+			$this->assertContains( $dependency, $scripts->registered[ $handle ]->deps, $dependency );
+			$this->assertArrayHasKey( $dependency, $scripts->registered, $dependency . ' が WP に登録されていない.' );
+		}
+		$this->assertSame( 'get-patterns-by-pattern-name', $scripts->registered[ $handle ]->textdomain );
+	}
+
 	public function test_renders_pattern_found_by_name() {
 		$this->make_pattern( 'Hero Block', '<!-- wp:paragraph --><p>HERO-BODY</p><!-- /wp:paragraph -->' );
 

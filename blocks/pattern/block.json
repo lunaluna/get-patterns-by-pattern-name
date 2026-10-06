@@ -4,6 +4,8 @@
 	"name": "gpbpn/pattern",
 	"title": "Pattern by name or slug",
 	"category": "reusable",
+	"icon": "controls-repeat",
+	"keywords": [ "pattern", "synced", "reusable", "slug" ],
 	"description": "Displays a synced pattern looked up by its name, or by its slug if no pattern has that name.",
 	"textdomain": "get-patterns-by-pattern-name",
 	"attributes": {
@@ -18,5 +20,6 @@
 		"customClassName": false,
 		"className": false,
 		"reusable": false
-	}
+	},
+	"editorScript": "file:./index.js"
 }
