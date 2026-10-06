@@ -35,7 +35,8 @@ function gpbpn_register_pattern_block() {
 
 	if ( $block_type instanceof WP_Block_Type ) {
 		foreach ( $block_type->editor_script_handles as $handle ) {
-			wp_set_script_translations( $handle, 'get-patterns-by-pattern-name' );
+			// 第 3 引数は、同梱の翻訳 JSON(languages/*.json)の置き場所. 指定しないと wp-content/languages/plugins だけを探す.
+			wp_set_script_translations( $handle, 'get-patterns-by-pattern-name', dirname( __DIR__ ) . '/languages' );
 		}
 	}
 }

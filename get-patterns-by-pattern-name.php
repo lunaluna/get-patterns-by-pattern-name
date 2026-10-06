@@ -13,6 +13,7 @@
  * License:           GPL-2.0+
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       get-patterns-by-pattern-name
+ * Domain Path:       /languages
  *
  * @package GetPatternsByPatternName
  */
@@ -34,6 +35,17 @@ $gpbpn_updater_register(
 		'github_repo' => 'lunaluna/get-patterns-by-pattern-name',
 	)
 );
+
+/**
+ * プラグイン同梱の翻訳(languages/)を読み込めるようにパスを登録する.
+ *
+ * 翻訳ファイル自体の読み込みは、最初に翻訳が必要になった時点で WordPress が行う(Just-in-time 読み込み).
+ * ここではパスを登録するだけなので、init より前に呼んでも早すぎる読み込みの警告は出ない.
+ * block.json の title / description の翻訳(ブロック登録時)にも間に合うよう、フックに掛けず直接呼ぶ.
+ *
+ * @since 1.5.0
+ */
+load_plugin_textdomain( 'get-patterns-by-pattern-name', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 
 /**
  * 内部キャッシュのバージョン番号を取得します.

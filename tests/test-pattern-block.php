@@ -100,6 +100,35 @@ class GPBPN_Test_Pattern_Block extends WP_UnitTestCase {
 		$this->assertSame( 'get-patterns-by-pattern-name', $scripts->registered[ $handle ]->textdomain );
 	}
 
+	/**
+	 * 同梱の日本語訳(languages/*.mo)に、必要な訳が入っている.
+	 *
+	 * 開発リポジトリは wp-content/plugins の外にあり、load_plugin_textdomain() の相対パスが成り立たないので、
+	 * このテストでは .mo を別のドメインとして直接読み込んで中身だけを確かめる.
+	 * パスの登録(languages/ から実際に読まれること)は、wp-content/plugins に導入した実機で確認する.
+	 */
+	public function test_bundled_japanese_mo_contains_translations() {
+		$mo = dirname( __DIR__ ) . '/languages/get-patterns-by-pattern-name-ja.mo';
+
+		$this->assertTrue( load_textdomain( 'gpbpn-test-ja', $mo, 'ja' ) );
+
+		$translations = get_translations_for_domain( 'gpbpn-test-ja' );
+		$this->assertSame( '同期パターン', $translations->translate( 'Synced pattern' ) );
+		$this->assertSame( 'スラッグで指定する', $translations->translate( 'Use the slug instead' ) );
+
+		unload_textdomain( 'gpbpn-test-ja' );
+	}
+
+	/**
+	 * 編集画面 JS の翻訳 JSON は、WP が「プラグインルートからの相対パスの md5」でファイルを探す.
+	 * index.js を移動・改名すると見つからなくなるので、その場合はここで気づけるようにしておく.
+	 */
+	public function test_script_translation_json_matches_editor_script_path() {
+		$json = dirname( __DIR__ ) . '/languages/get-patterns-by-pattern-name-ja-' . md5( 'blocks/pattern/index.js' ) . '.json';
+
+		$this->assertFileExists( $json );
+	}
+
 	public function test_renders_pattern_found_by_name() {
 		$this->make_pattern( 'Hero Block', '<!-- wp:paragraph --><p>HERO-BODY</p><!-- /wp:paragraph -->' );
 
