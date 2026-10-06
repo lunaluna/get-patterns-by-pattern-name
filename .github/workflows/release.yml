@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'リリースするタグ (例 1.5.0).'
+        description: 'リリースするタグ (例 1.6.0).'
         required: true
 
 # 呼び出し先の GITHUB_TOKEN 権限は呼び出し元を超えられないため、
