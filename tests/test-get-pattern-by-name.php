@@ -290,6 +290,69 @@ class GPBPN_Test_Get_Pattern_By_Name extends WP_UnitTestCase {
 		$this->assertInstanceOf( WP_Post::class, get_pattern_by_name( 'HeaderBanner' ) );
 	}
 
+	/**
+	 * 厳密一致が有効で、照合順序では同じ名前の候補が複数あるとき、完全に一致するものを返す(1.5.0 で修正).
+	 *
+	 * 修正前は ID の小さい候補(`ABC`)だけを厳密に比べて弾き、完全に一致する `abc` があっても null を返していた.
+	 */
+	public function test_strict_title_match_picks_exact_match_among_collation_candidates() {
+		self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_block',
+				'post_title'  => 'ABC',
+				'post_status' => 'publish',
+			)
+		);
+		$exact = self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_block',
+				'post_title'  => 'abc',
+				'post_status' => 'publish',
+			)
+		);
+
+		add_filter( 'gpbpn_strict_title_match', '__return_true' );
+
+		$pattern = get_pattern_by_name( 'abc' );
+
+		$this->assertInstanceOf( WP_Post::class, $pattern );
+		$this->assertSame( $exact, $pattern->ID );
+	}
+
+	/**
+	 * 厳密一致が有効なとき、重複検知は「完全に一致するものが 2 件以上」のときだけ発火する(1.5.0 で修正).
+	 */
+	public function test_strict_title_match_duplicate_action_counts_exact_matches_only() {
+		$first = self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_block',
+				'post_title'  => 'abc',
+				'post_status' => 'publish',
+			)
+		);
+		self::factory()->post->create(
+			array(
+				'post_type'   => 'wp_block',
+				'post_title'  => 'ABC',
+				'post_status' => 'publish',
+			)
+		);
+
+		add_filter( 'gpbpn_strict_title_match', '__return_true' );
+
+		$fired = 0;
+		add_action(
+			'gpbpn_duplicate_pattern_found',
+			function () use ( &$fired ) {
+				++$fired;
+			}
+		);
+
+		// 完全に一致するのは 1 件だけなので、重複扱いにしない.
+		$this->assertSame( $first, get_pattern_by_name( 'abc' )->ID );
+		$this->assertSame( 0, $fired );
+	}
+
 	public function test_synced_only_filter_excludes_unsynced_patterns() {
 		$id = self::factory()->post->create(
 			array(

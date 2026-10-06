@@ -192,6 +192,29 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 		);
 	}
 
+	/**
+	 * DB の照合順序(collation)に依存しない、post_title の厳密な完全一致を要求するかどうかを制御します.
+	 *
+	 * 既定では WP_Query の title パラメータによる DB 側の比較結果をそのまま使用します(既定 false).
+	 * true を返すと、DB から取得した post_title が実際に問い合わせた文字列と一致する場合のみ
+	 * パターンを返します。WordPress 標準の照合順序(utf8mb4_unicode_ci 等)は大文字小文字や
+	 * 全角/半角を区別しないため、権限の低いユーザーが紛らわしい名前で作成したパターンに
+	 * 差し替えられるのを防げます(詳細は readme の FAQ を参照).
+	 *
+	 * 後方互換のため 1.3.0 では既定 false です(2.0.0 では既定 true に変更予定).
+	 * なお `\`(バックスラッシュ)を含むタイトルは wp_insert_post() の保存時点で既に
+	 * 失われる(WordPress 自体が入力値を unslash するため)ので、実際に影響するのは
+	 * データベースへ直接タイトルを書き込むなど通常の投稿作成 API を経由しない場合に限られます.
+	 *
+	 * @since 1.3.0
+	 * @since 1.5.0 `$field` を追加.
+	 *
+	 * @param bool   $strict       厳密一致を要求するかどうか. 既定 false.
+	 * @param string $pattern_name サニタイズ済みのパターン名.
+	 * @param string $field        探す対象. 'title'(名前).
+	 */
+	$strict = (bool) apply_filters( 'gpbpn_strict_title_match', false, $pattern_name, $field );
+
 	$defaults = array(
 		// 同期パターンの投稿タイプを指定する.
 		'post_type'              => 'wp_block',
@@ -266,9 +289,18 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	}
 
 	// 投稿タイプは同期パターン固定とし、外部フィルタからの上書きを許可しない.
-	$args['post_type']      = 'wp_block';
-	$args['posts_per_page'] = min( 2, max( 1, (int) ( isset( $args['posts_per_page'] ) ? $args['posts_per_page'] : 2 ) ) );
-	$args['fields']         = 'ids';
+	$args['post_type'] = 'wp_block';
+	$args['fields']    = 'ids';
+
+	if ( $strict ) {
+		// 厳密一致のときは、照合順序で同じ名前になる候補をすべて取る(件数の上限なし).
+		// 先頭の 1 件だけを取ると、ID の小さい `ABC` を厳密に比べて弾き、完全に一致する `abc` があっても
+		// 見つからなくなるため(1.5.0 で修正). fields が ids なので軽く、候補は照合順序で同名のものだけ.
+		// 件数の上限が変わるので、キャッシュキー(引数のハッシュ)も非 strict とは別になる.
+		$args['posts_per_page'] = -1;
+	} else {
+		$args['posts_per_page'] = min( 2, max( 1, (int) ( isset( $args['posts_per_page'] ) ? $args['posts_per_page'] : 2 ) ) );
+	}
 
 	$cache_key    = gpbpn_get_cache_key( $args );
 	$cached_value = wp_cache_get( $cache_key, 'gpbpn' );
@@ -279,6 +311,19 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	} else {
 		$query    = new WP_Query( $args );
 		$post_ids = $query->posts;
+
+		if ( $strict ) {
+			// 候補のうち、post_title が完全に一致するものだけを残す(ID 順は維持される).
+			$post_ids = array_values(
+				array_filter(
+					$post_ids,
+					static function ( $candidate_id ) use ( $pattern_name ) {
+						$candidate = get_post( $candidate_id );
+						return $candidate instanceof WP_Post && $candidate->post_title === $pattern_name;
+					}
+				)
+			);
+		}
 
 		if ( count( $post_ids ) > 1 ) {
 			/**
@@ -303,29 +348,8 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	// 投稿オブジェクト自体は get_post() 経由で取得し、WordPress コア標準の投稿オブジェクトキャッシュを活用する.
 	$pattern = $pattern_id > 0 ? get_post( $pattern_id ) : null;
 
-	/**
-	 * DB の照合順序(collation)に依存しない、post_title の厳密な完全一致を要求するかどうかを制御します.
-	 *
-	 * 既定では WP_Query の title パラメータによる DB 側の比較結果をそのまま使用します(既定 false).
-	 * true を返すと、DB から取得した post_title が実際に問い合わせた文字列と一致する場合のみ
-	 * パターンを返します。WordPress 標準の照合順序(utf8mb4_unicode_ci 等)は大文字小文字や
-	 * 全角/半角を区別しないため、権限の低いユーザーが紛らわしい名前で作成したパターンに
-	 * 差し替えられるのを防げます(詳細は readme の FAQ を参照).
-	 *
-	 * 後方互換のため 1.3.0 では既定 false です(2.0.0 では既定 true に変更予定).
-	 * なお `\`(バックスラッシュ)を含むタイトルは wp_insert_post() の保存時点で既に
-	 * 失われる(WordPress 自体が入力値を unslash するため)ので、実際に影響するのは
-	 * データベースへ直接タイトルを書き込むなど通常の投稿作成 API を経由しない場合に限られます.
-	 *
-	 * @since 1.3.0
-	 * @since 1.5.0 `$field` を追加.
-	 *
-	 * @param bool   $strict       厳密一致を要求するかどうか. 既定 false.
-	 * @param string $pattern_name サニタイズ済みのパターン名.
-	 * @param string $field        探す対象. 'title'(名前).
-	 */
-	$strict = (bool) apply_filters( 'gpbpn_strict_title_match', false, $pattern_name, $field );
-
+	// 厳密一致が有効な場合の最終確認. 通常は上のクエリ段階で完全一致のものだけに絞り込み済みだが、
+	// キャッシュの値が古い場合などに備えて、返す直前にも比べておく.
 	if ( $strict && $pattern instanceof WP_Post && $pattern->post_title !== $pattern_name ) {
 		$pattern = null;
 	}
