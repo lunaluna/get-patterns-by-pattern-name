@@ -3,7 +3,7 @@
  * Plugin Name:       Get Patterns by Pattern Name
  * Plugin URI:        https://github.com/lunaluna/get-patterns-by-pattern-name
  * Description:       同期パターン（wp_block）を「名前」（見つからなければ「スラッグ」）で取得するヘルパー関数と、テンプレートや投稿に置けるブロックを提供します。
- * Version:           1.5.0
+ * Version:           1.6.0
  * Requires at least: 6.8
  * Tested up to:      7.1.2
  * Requires PHP:      7.4
@@ -605,3 +605,6 @@ require_once __DIR__ . '/includes/pattern-block.php';
 
 // 編集画面用の REST ルート gpbpn/v1/resolve(1.5.0).
 require_once __DIR__ . '/includes/rest-resolve.php';
+
+// 管理画面の左カラムに「パターン」(同期パターンの一覧)メニューを追加する(1.6.0).
+require_once __DIR__ . '/includes/admin-menu.php';
