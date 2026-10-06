@@ -127,7 +127,9 @@ function gpbpn_get_cache_key( array $args ) {
  * 名前('title')とスラッグ('slug')の違い:
  *
  * - 入力の正規化: 名前は `sanitize_text_field()`、スラッグは `sanitize_title_for_query()`(WP_Query の `name` と同じ変換).
- * - 最大長: どちらも生の入力に `gpbpn_max_name_length`(既定 255 バイト)を適用する. WP の正規化は値を 200 バイトに切り詰めるため、正規化後では判定できない.
+ * - 最大長: 名前だけに `gpbpn_max_name_length`(既定 255 バイト)を適用する. スラッグには適用しない.
+ *   WP の正規化(sanitize_title_for_query)は値を 200 バイト(post_name 列の長さ)に切り詰めるので、
+ *   長すぎる入力は WP 本体の URL 解決と同じく切り詰めた値で照合する(先頭 200 バイトが同じスラッグには一致し得る).
  * - クエリ: 名前は `title`、スラッグは `name`(どちらも完全一致).
  * - 厳密一致(`gpbpn_strict_title_match`): 名前だけに適用する. スラッグは小文字の ASCII と `%xx` に
  *   正規化されるため、照合順序の差が問題にならない.
@@ -161,26 +163,6 @@ function gpbpn_lookup_pattern( $pattern_name, $field, $strict_default = false, $
 		);
 	}
 
-	/**
-	 * パターン名の最大長（バイト数）を変更します.
-	 *
-	 * 名前とスラッグの両方の入力チェックに使います(1.5.0 以降. スラッグは WP_Query が値を 200 バイトで
-	 * 切り詰めるため、生の入力の長さで弾きます. 有効なスラッグは URL エンコード済みでも 200 バイト以下で、
-	 * デコード済みの値はそれより短いので、既定の 255 でスラッグの取りこぼしは起きません).
-	 *
-	 * @since 1.2.0
-	 *
-	 * @param int $max_length 最大長. 0 以下を指定すると上限チェックを無効化します. 既定 255.
-	 */
-	$max_length = (int) apply_filters( 'gpbpn_max_name_length', 255 );
-	if ( $max_length > 0 && strlen( $pattern_name ) > $max_length ) {
-		return array(
-			'pattern'  => null,
-			'value'    => '',
-			'finished' => false,
-		);
-	}
-
 	if ( $is_slug ) {
 		// スラッグは WP_Query の name パラメータと同じ変換で正規化する.
 		// デコード済み・エンコード済み・大文字のどれで渡しても同じ値(同じキャッシュキー)になる.
@@ -195,6 +177,24 @@ function gpbpn_lookup_pattern( $pattern_name, $field, $strict_default = false, $
 			);
 		}
 	} else {
+		/**
+		 * パターン名の最大長（バイト数）を変更します.
+		 *
+		 * 名前にだけ適用します(スラッグには適用しません. WP が値を 200 バイトに切り詰めて照合するため).
+		 *
+		 * @since 1.2.0
+		 *
+		 * @param int $max_length 最大長. 0 以下を指定すると上限チェックを無効化します. 既定 255.
+		 */
+		$max_length = (int) apply_filters( 'gpbpn_max_name_length', 255 );
+		if ( $max_length > 0 && strlen( $pattern_name ) > $max_length ) {
+			return array(
+				'pattern'  => null,
+				'value'    => '',
+				'finished' => false,
+			);
+		}
+
 		// 多層防御としてサニタイズを適用する(SQL 自体は WP_Query 内部の prepare で保護される).
 		$pattern_name = sanitize_text_field( $pattern_name );
 	}
@@ -506,7 +506,9 @@ if ( ! function_exists( 'get_pattern_by_slug' ) ) :
 	 *
 	 * 引数は `WP_Query` の `name` と同じ変換（`sanitize_title_for_query()`）を通すため、
 	 * 日本語スラッグは URL エンコード済み・デコード済み・大文字のどれで渡しても一致します.
-	 * 公開済み（publish）のパターンだけが対象です. 入力が `gpbpn_max_name_length`（既定 255 バイト）を超える場合は null を返します.
+	 * 公開済み（publish）のパターンだけが対象です.
+	 * 正規化で値は 200 バイト（post_name 列の長さ）に切り詰められるため、長すぎる入力は WP 本体の URL 解決と
+	 * 同じく切り詰めた値で照合します（`gpbpn_max_name_length` はスラッグには適用しません）.
 	 * `gpbpn_strict_title_match` は適用しません（スラッグは正規化されるため）.
 	 *
 	 * 使用例:
@@ -516,7 +518,7 @@ if ( ! function_exists( 'get_pattern_by_slug' ) ) :
 	 * @since 1.5.0
 	 *
 	 * @param string $slug 取得したいパターンのスラッグ（post_name）.
-	 *                     文字列以外・空文字・最大長超過の場合は null を返します.
+	 *                     文字列以外・空文字の場合は null を返します.
 	 * @return WP_Post|null 見つかった場合は WP_Post オブジェクト、見つからなければ null.
 	 */
 	function get_pattern_by_slug( $slug ) {

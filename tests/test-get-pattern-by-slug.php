@@ -64,17 +64,33 @@ class GPBPN_Test_Get_Pattern_By_Slug extends WP_UnitTestCase {
 		$this->assertNull( get_pattern_by_name_or_slug( 'draft-one' ) );
 	}
 
-	public function test_slug_over_max_length_returns_null_without_hooks() {
-		$fired = 0;
-		add_action(
-			'gpbpn_pattern_not_found',
-			function () use ( &$fired ) {
-				++$fired;
+	/**
+	 * gpbpn_max_name_length は名前だけに効き、スラッグ指定には影響しない(1.5.0).
+	 */
+	public function test_max_name_length_filter_does_not_affect_slug_lookup() {
+		$id = $this->make_pattern( 'Short', 'a-rather-long-slug-for-this-pattern' );
+
+		add_filter(
+			'gpbpn_max_name_length',
+			function () {
+				return 5;
 			}
 		);
 
-		$this->assertNull( get_pattern_by_slug( str_repeat( 'a', 256 ) ) );
-		$this->assertSame( 0, $fired );
+		$this->assertSame( $id, get_pattern_by_slug( 'a-rather-long-slug-for-this-pattern' )->ID );
+		// 名前としては上限超過なので、name_or_slug は名前の段階で null を返す(従来の入力チェックと同じ).
+		$this->assertNull( get_pattern_by_name_or_slug( 'a-rather-long-slug-for-this-pattern' ) );
+	}
+
+	/**
+	 * 長すぎる入力は WP の正規化で 200 バイトに切り詰められ、その値で照合される(WP 本体の URL 解決と同じ).
+	 */
+	public function test_slug_longer_than_200_bytes_is_matched_after_wp_truncation() {
+		$prefix = str_repeat( 'あ', 22 ); // エンコード済みで 198 バイト.
+		$id     = $this->make_pattern( 'JP Slug', $prefix );
+
+		$this->assertSame( $id, get_pattern_by_slug( $prefix )->ID );
+		$this->assertSame( $id, get_pattern_by_slug( $prefix . str_repeat( 'い', 8 ) )->ID );
 	}
 
 	public function test_invalid_input_returns_null() {
