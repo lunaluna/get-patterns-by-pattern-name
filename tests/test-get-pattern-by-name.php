@@ -67,6 +67,71 @@ class GPBPN_Test_Get_Pattern_By_Name extends WP_UnitTestCase {
 		$this->assertTrue( $fired );
 	}
 
+	/**
+	 * 見つからないとき、not_found → result の順に 1 回ずつ発火し、最後の引数に $field('title')が渡る(1.5.0).
+	 */
+	public function test_not_found_then_result_fire_once_in_order_with_field() {
+		$log = array();
+		add_action(
+			'gpbpn_pattern_not_found',
+			function ( $name, $field ) use ( &$log ) {
+				$log[] = array( 'not_found', $name, $field );
+			},
+			10,
+			2
+		);
+		add_filter(
+			'gpbpn_result',
+			function ( $pattern, $name, $field ) use ( &$log ) {
+				$log[] = array( 'result', $name, $field );
+				return $pattern;
+			},
+			10,
+			3
+		);
+
+		get_pattern_by_name( 'no-such-pattern' );
+
+		$this->assertSame(
+			array(
+				array( 'not_found', 'no-such-pattern', 'title' ),
+				array( 'result', 'no-such-pattern', 'title' ),
+			),
+			$log
+		);
+	}
+
+	/**
+	 * 入力チェックで弾いた場合と pre フィルタで短絡した場合は、not_found / result を発火しない(従来どおり).
+	 */
+	public function test_hooks_do_not_fire_on_invalid_input_or_short_circuit() {
+		$count = 0;
+		$bump  = function () use ( &$count ) {
+			++$count;
+		};
+		add_action( 'gpbpn_pattern_not_found', $bump );
+		add_filter(
+			'gpbpn_result',
+			function ( $pattern ) use ( &$count ) {
+				++$count;
+				return $pattern;
+			}
+		);
+
+		get_pattern_by_name( '' );
+		get_pattern_by_name( array( 'x' ) );
+		$this->assertSame( 0, $count );
+
+		add_filter(
+			'gpbpn_pre_get_pattern',
+			function () {
+				return new stdClass();
+			}
+		);
+		get_pattern_by_name( 'anything' );
+		$this->assertSame( 0, $count );
+	}
+
 	public function test_duplicate_names_resolve_to_oldest_and_fire_action() {
 		$older = self::factory()->post->create(
 			array(
