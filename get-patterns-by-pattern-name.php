@@ -124,12 +124,24 @@ function gpbpn_get_cache_key( array $args ) {
  * @since 1.5.0
  * @access private
  *
- * @param mixed  $pattern_name 探す文字列(名前). 文字列以外は null を返します.
- * @param string $field        探す対象. 'title'(名前)のみ対応(スラッグは今後追加).
+ * 名前('title')とスラッグ('slug')の違い:
+ *
+ * - 入力の正規化: 名前は `sanitize_text_field()`、スラッグは `sanitize_title_for_query()`(WP_Query の `name` と同じ変換).
+ * - 最大長: どちらも生の入力に `gpbpn_max_name_length`(既定 255 バイト)を適用する. WP の正規化は値を 200 バイトに切り詰めるため、正規化後では判定できない.
+ * - クエリ: 名前は `title`、スラッグは `name`(どちらも完全一致).
+ * - 厳密一致(`gpbpn_strict_title_match`): 名前だけに適用する. スラッグは小文字の ASCII と `%xx` に
+ *   正規化されるため、照合順序の差が問題にならない.
+ *
+ * @param mixed  $pattern_name   探す文字列(名前またはスラッグ). 文字列以外は null を返します.
+ * @param string $field          探す対象. 'title'(名前)または 'slug'(スラッグ).
+ * @param bool   $strict_default 名前で探すときの `gpbpn_strict_title_match` の既定値.
+ * @param string $caller         呼び出し元('name' / 'slug' / 'name_or_slug'). `gpbpn_strict_title_match` に渡す.
  * @return array{pattern: WP_Post|null, value: string, finished: bool} 検索結果.
  *         `value` はサニタイズ済みの文字列(フック・キャッシュキーに使う値).
  */
-function gpbpn_lookup_pattern( $pattern_name, $field ) {
+function gpbpn_lookup_pattern( $pattern_name, $field, $strict_default = false, $caller = 'name' ) {
+	$is_slug = 'slug' === $field;
+
 	// 文字列以外（配列・オブジェクト等）を渡された場合は早期リターンしてクエリを発行しない.
 	if ( ! is_string( $pattern_name ) ) {
 		return array(
@@ -152,6 +164,10 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	/**
 	 * パターン名の最大長（バイト数）を変更します.
 	 *
+	 * 名前とスラッグの両方の入力チェックに使います(1.5.0 以降. スラッグは WP_Query が値を 200 バイトで
+	 * 切り詰めるため、生の入力の長さで弾きます. 有効なスラッグは URL エンコード済みでも 200 バイト以下で、
+	 * デコード済みの値はそれより短いので、既定の 255 でスラッグの取りこぼしは起きません).
+	 *
 	 * @since 1.2.0
 	 *
 	 * @param int $max_length 最大長. 0 以下を指定すると上限チェックを無効化します. 既定 255.
@@ -165,8 +181,23 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 		);
 	}
 
-	// 多層防御としてサニタイズを適用する(SQL 自体は WP_Query 内部の prepare で保護される).
-	$pattern_name = sanitize_text_field( $pattern_name );
+	if ( $is_slug ) {
+		// スラッグは WP_Query の name パラメータと同じ変換で正規化する.
+		// デコード済み・エンコード済み・大文字のどれで渡しても同じ値(同じキャッシュキー)になる.
+		// なお WP はこの変換で値を 200 バイト(post_name 列の長さ)に切り詰める(wp-includes/formatting.php の utf8_uri_encode).
+		$pattern_name = sanitize_title_for_query( $pattern_name );
+
+		if ( '' === $pattern_name ) {
+			return array(
+				'pattern'  => null,
+				'value'    => '',
+				'finished' => false,
+			);
+		}
+	} else {
+		// 多層防御としてサニタイズを適用する(SQL 自体は WP_Query 内部の prepare で保護される).
+		$pattern_name = sanitize_text_field( $pattern_name );
+	}
 
 	/**
 	 * クエリ発行前に結果を短絡させます.
@@ -180,7 +211,7 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	 *
 	 * @param WP_Post|null $pre          短絡値. デフォルト null(短絡しない).
 	 * @param string       $pattern_name サニタイズ済みのパターン名.
-	 * @param string       $field        探す対象. 'title'(名前).
+	 * @param string       $field        探す対象. 'title'(名前)または 'slug'(スラッグ).
 	 */
 	$pre = apply_filters( 'gpbpn_pre_get_pattern', null, $pattern_name, $field );
 	if ( null !== $pre ) {
@@ -201,24 +232,27 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	 * 全角/半角を区別しないため、権限の低いユーザーが紛らわしい名前で作成したパターンに
 	 * 差し替えられるのを防げます(詳細は readme の FAQ を参照).
 	 *
-	 * 後方互換のため 1.3.0 では既定 false です(2.0.0 では既定 true に変更予定).
+	 * 後方互換のため `get_pattern_by_name()` は 1.3.0 以降も既定 false です(2.0.0 では既定 true に変更予定).
+	 * 1.5.0 で追加した `get_pattern_by_name_or_slug()` とブロック `gpbpn/pattern` は、
+	 * 既存の呼び出しに影響が無いので既定 true です. スラッグで探すときは適用しません.
 	 * なお `\`(バックスラッシュ)を含むタイトルは wp_insert_post() の保存時点で既に
 	 * 失われる(WordPress 自体が入力値を unslash するため)ので、実際に影響するのは
 	 * データベースへ直接タイトルを書き込むなど通常の投稿作成 API を経由しない場合に限られます.
 	 *
 	 * @since 1.3.0
-	 * @since 1.5.0 `$field` を追加.
+	 * @since 1.5.0 `$field` と `$caller` を追加. `get_pattern_by_name_or_slug()` では既定 true.
 	 *
-	 * @param bool   $strict       厳密一致を要求するかどうか. 既定 false.
+	 * @param bool   $strict       厳密一致を要求するかどうか. `get_pattern_by_name()` の既定は false.
 	 * @param string $pattern_name サニタイズ済みのパターン名.
 	 * @param string $field        探す対象. 'title'(名前).
+	 * @param string $caller       呼び出し元. 'name'(get_pattern_by_name)/ 'name_or_slug'(get_pattern_by_name_or_slug・ブロック).
 	 */
-	$strict = (bool) apply_filters( 'gpbpn_strict_title_match', false, $pattern_name, $field );
+	$strict = ! $is_slug && (bool) apply_filters( 'gpbpn_strict_title_match', (bool) $strict_default, $pattern_name, $field, $caller );
 
 	$defaults = array(
 		// 同期パターンの投稿タイプを指定する.
 		'post_type'              => 'wp_block',
-		// post_title の完全一致で絞り込む.
+		// post_title の完全一致で絞り込む(スラッグで探すときは下で name に置き換える).
 		'title'                  => $pattern_name,
 		// 公開済みのみを対象とする.
 		'post_status'            => 'publish',
@@ -238,6 +272,12 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 		'fields'                 => 'ids',
 	);
 
+	if ( $is_slug ) {
+		// スラッグは post_name の完全一致で絞り込む(WP_Query の name パラメータ).
+		unset( $defaults['title'] );
+		$defaults['name'] = $pattern_name;
+	}
+
 	/**
 	 * 同期パターン(wp_pattern_sync_status が未設定/空)のみを取得対象にするかどうかを制御します.
 	 *
@@ -251,7 +291,7 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	 *
 	 * @param bool   $synced_only  同期パターンのみに限定するかどうか. 既定 false.
 	 * @param string $pattern_name サニタイズ済みのパターン名.
-	 * @param string $field        探す対象. 'title'(名前).
+	 * @param string $field        探す対象. 'title'(名前)または 'slug'(スラッグ).
 	 */
 	$synced_only = (bool) apply_filters( 'gpbpn_synced_only', false, $pattern_name, $field );
 
@@ -279,7 +319,7 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 	 *
 	 * @param array  $args         WP_Query の引数.
 	 * @param string $pattern_name サニタイズ済みのパターン名.
-	 * @param string $field        探す対象. 'title'(名前).
+	 * @param string $field        探す対象. 'title'(名前)または 'slug'(スラッグ).
 	 */
 	$args = apply_filters( 'gpbpn_query_args', $defaults, $pattern_name, $field );
 
@@ -334,7 +374,7 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
 			 *
 			 * @param string $pattern_name サニタイズ済みのパターン名.
 			 * @param int[]  $post_ids     重複しているパターンの投稿 ID の配列.
-			 * @param string $field        探す対象. 'title'(名前).
+			 * @param string $field        探す対象. 'title'(名前)または 'slug'(スラッグ).
 			 */
 			do_action( 'gpbpn_duplicate_pattern_found', $pattern_name, $post_ids, $field );
 		}
@@ -378,7 +418,7 @@ function gpbpn_lookup_pattern( $pattern_name, $field ) {
  *
  * @param WP_Post|null $pattern      検索結果.
  * @param string       $pattern_name サニタイズ済みのパターン名.
- * @param string       $field        探す対象. 'title'(名前).
+ * @param string       $field        探した対象. 'title' / 'slug' / 'name_or_slug'.
  * @return WP_Post|null フィルタ適用後の結果.
  */
 function gpbpn_finish_pattern_lookup( $pattern, $pattern_name, $field ) {
@@ -390,7 +430,7 @@ function gpbpn_finish_pattern_lookup( $pattern, $pattern_name, $field ) {
 		 * @since 1.5.0 `$field` を追加.
 		 *
 		 * @param string $pattern_name サニタイズ済みのパターン名.
-		 * @param string $field        探す対象. 'title'(名前).
+		 * @param string $field        探した対象. 'title' / 'slug' / 'name_or_slug'(名前で探してからスラッグで探した場合).
 		 */
 		do_action( 'gpbpn_pattern_not_found', $pattern_name, $field );
 	}
@@ -403,7 +443,7 @@ function gpbpn_finish_pattern_lookup( $pattern, $pattern_name, $field ) {
 	 *
 	 * @param WP_Post|null $pattern      取得結果.
 	 * @param string       $pattern_name サニタイズ済みのパターン名.
-	 * @param string       $field        探す対象. 'title'(名前).
+	 * @param string       $field        探した対象. 'title' / 'slug' / 'name_or_slug'(名前で探してからスラッグで探した場合).
 	 */
 	$result = apply_filters( 'gpbpn_result', $pattern, $pattern_name, $field );
 
@@ -453,5 +493,95 @@ if ( ! function_exists( 'get_pattern_by_name' ) ) :
 		}
 
 		return gpbpn_finish_pattern_lookup( $lookup['pattern'], $lookup['value'], 'title' );
+	}
+endif;
+
+if ( ! function_exists( 'get_pattern_by_slug' ) ) :
+	/**
+	 * スラッグ（post_name）の完全一致で同期パターンを取得します.
+	 *
+	 * 名前は後から変更できますが、スラッグは作成時のまま残ります. 名前を変えても壊したくない
+	 * 指定には、スラッグを使います. 管理画面にはスラッグの表示欄が無いため、確かめるには
+	 * ブロック `gpbpn/pattern` のサイドバーか REST（`/wp/v2/blocks`）を使います.
+	 *
+	 * 引数は `WP_Query` の `name` と同じ変換（`sanitize_title_for_query()`）を通すため、
+	 * 日本語スラッグは URL エンコード済み・デコード済み・大文字のどれで渡しても一致します.
+	 * 公開済み（publish）のパターンだけが対象です. 入力が `gpbpn_max_name_length`（既定 255 バイト）を超える場合は null を返します.
+	 * `gpbpn_strict_title_match` は適用しません（スラッグは正規化されるため）.
+	 *
+	 * 使用例:
+	 *
+	 *     $pattern = get_pattern_by_slug( 'discover-alpine-intro' );
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param string $slug 取得したいパターンのスラッグ（post_name）.
+	 *                     文字列以外・空文字・最大長超過の場合は null を返します.
+	 * @return WP_Post|null 見つかった場合は WP_Post オブジェクト、見つからなければ null.
+	 */
+	function get_pattern_by_slug( $slug ) {
+		$lookup = gpbpn_lookup_pattern( $slug, 'slug', false, 'slug' );
+
+		// 入力チェックで弾いた場合と gpbpn_pre_get_pattern で短絡した場合は、フックを発火せずそのまま返す.
+		if ( ! $lookup['finished'] ) {
+			return $lookup['pattern'];
+		}
+
+		return gpbpn_finish_pattern_lookup( $lookup['pattern'], $lookup['value'], 'slug' );
+	}
+endif;
+
+if ( ! function_exists( 'get_pattern_by_name_or_slug' ) ) :
+	/**
+	 * 名前（post_title）で探し、見つからなければスラッグ（post_name）で探して同期パターンを取得します.
+	 *
+	 * 管理画面ではスラッグを確認できないため、編集者は名前で指定するのが基本です. 一方、名前は
+	 * 変更できるので、作成時の名前のまま書いておけば、名前を変えられてもスラッグ側で見つかります.
+	 * ブロック `gpbpn/pattern` はこの関数で探します.
+	 *
+	 * - 名前で一致すれば、スラッグは探しません（名前が優先です）.
+	 * - 名前は `gpbpn_strict_title_match` を既定で有効にして探します（`get_pattern_by_name()` は既定で無効のまま）.
+	 *   無効にするには `add_filter( 'gpbpn_strict_title_match', '__return_false', 10, 4 )` のように、
+	 *   第 4 引数 `$caller` が `'name_or_slug'` のときだけ false を返します.
+	 * - 見つからなかったときの `gpbpn_pattern_not_found` は 1 回だけ発火します（第 2 引数 `$field` は `'name_or_slug'`）.
+	 *
+	 * 注意: 名前が別のパターンのスラッグと一致する場合は、名前で一致したパターンが返ります.
+	 *
+	 * 使用例:
+	 *
+	 *     $pattern = get_pattern_by_name_or_slug( 'Discover Alpine Intro' );
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param string $value 名前またはスラッグ.
+	 *                      文字列以外・空文字・最大長超過の場合は null を返します.
+	 * @return WP_Post|null 見つかった場合は WP_Post オブジェクト、見つからなければ null.
+	 */
+	function get_pattern_by_name_or_slug( $value ) {
+		// 1. 名前で探す(厳密一致は既定で有効).
+		$by_title = gpbpn_lookup_pattern( $value, 'title', true, 'name_or_slug' );
+
+		// 入力チェックで弾いた場合と gpbpn_pre_get_pattern で短絡した場合は、フックを発火せずそのまま返す.
+		if ( ! $by_title['finished'] ) {
+			return $by_title['pattern'];
+		}
+
+		$pattern = $by_title['pattern'];
+
+		// 2. 名前で見つからなければスラッグで探す. この時点では not_found を発火しない.
+		if ( null === $pattern ) {
+			$by_slug = gpbpn_lookup_pattern( $value, 'slug', false, 'name_or_slug' );
+
+			if ( ! $by_slug['finished'] && null !== $by_slug['pattern'] ) {
+				// スラッグ側の gpbpn_pre_get_pattern で短絡した場合は、その値をそのまま返す.
+				return $by_slug['pattern'];
+			}
+
+			// スラッグとして不正な値(正規化後に空・200 バイト超)は「見つからなかった」として扱う.
+			$pattern = $by_slug['pattern'];
+		}
+
+		// 3. 結果を確定する. not_found / result は 1 回ずつ、名前のサニタイズ済みの値で発火する.
+		return gpbpn_finish_pattern_lookup( $pattern, $by_title['value'], 'name_or_slug' );
 	}
 endif;
