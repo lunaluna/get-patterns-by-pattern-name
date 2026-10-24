@@ -3,9 +3,9 @@
  * Plugin Name:       Get Patterns by Pattern Name
  * Plugin URI:        https://github.com/lunaluna/get-patterns-by-pattern-name
  * Description:       同期パターン（wp_block）を「名前」（見つからなければ「スラッグ」）で取得するヘルパー関数と、テンプレートや投稿に置けるブロックを提供します。
- * Version:           1.6.0
+ * Version:           1.6.1
  * Requires at least: 6.8
- * Tested up to:      7.1.2
+ * Tested up to:      7.1
  * Requires PHP:      7.4
  * Author:            lunaluna_dev
  * Author URI:        https://profiles.wordpress.org/lunaluna_dev/

@@ -2,9 +2,9 @@
 Contributors: lunaluna_dev
 Tags: block patterns, synced patterns, wp_block, helper, query
 Requires at least: 6.8
-Tested up to: 7.1.2
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -226,6 +226,10 @@ WordPress 管理画面の「パターン」（または「再利用ブロック�
 
 == Changelog ==
 
+= 1.6.1 =
+* 同梱の自動更新ライブラリ（`lib/l2d-updater`）を 1.3.1 に更新。リリース用ワークフローの参照も 1.3.1 に更新し、外部 Actions のコミット固定と、配布 ZIP の中身の検査が入ります。
+* 既存の関数・フック・ブロック・REST ルートの挙動は変わりません。
+
 = 1.6.0 =
 * 管理画面の左カラムに「パターン」メニューを追加。同期パターンの一覧（`edit.php?post_type=wp_block`）を開いて編集できます。既定では編集者以上（`edit_others_posts`）に表示し、「固定ページ」の直後に並びます。ブロックテーマ・クラシックテーマのどちらでも表示します。
 * 新規フィルタ `gpbpn_show_admin_menu`（メニューの表示可否）と `gpbpn_admin_menu_args`（ラベル・権限・アイコン・位置の変更）を追加。
@@ -267,6 +271,9 @@ WordPress 管理画面の「パターン」（または「再利用ブロック�
 * 初回リリース。`get_pattern_by_name()` 関数を追加。
 
 == Upgrade Notice ==
+
+= 1.6.1 =
+同梱の自動更新ライブラリの更新です。既存の関数シグネチャ・戻り値・既定の挙動は後方互換です。
 
 = 1.6.0 =
 既存の関数シグネチャ・戻り値・既定の挙動は後方互換です。管理画面の左カラムに「パターン」メニューが追加され、編集者以上のユーザーに表示されます。表示したくない場合は `gpbpn_show_admin_menu` フィルタで `false` を返してください。
